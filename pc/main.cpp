@@ -1,0 +1,66 @@
+#include <iostream>
+#include <stdlib.h>
+#include <stdio.h>
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
+#include "rs232.h"
+
+#include "network_module.h"
+#include "createXml.h"
+
+#define BUFFSIZERS 1024
+
+using namespace std;
+using namespace rapidxml;
+
+int main(int argc, char *argv[])
+{
+    //BY DEFAULT TRANSMISSION IS 8N1 WITH NO FLOW CONTROL
+    int serialPort = 16;//COM3 or /dev/ttyS3
+    int baudRate = 9600; //baud rate
+    int readBytes = 0; //nb of bytes that will be read
+    SOCKET sock;
+    unsigned char buff[BUFFSIZERS];
+    char bufferSoc[BUF_SIZE];
+    string xml;
+
+    if(RS232_OpenComport(serialPort, baudRate))
+    {
+        cout << "cannot open comport " << serialPort << endl;
+        return 0;
+    }
+    sock = init_connection_module(argv[1],atoi(argv[3]));
+
+	//use of a descriptor in order to use non-blocking sockets
+	fd_set rdfs;
+	if(fcntl(sock, F_SETFL, O_NONBLOCK) < 0)
+		printf("Error setting socket in non blocking mode\n");
+	else
+		printf("Socket is in non blocking mode\n");
+
+    // send the Applcation's name
+	write_server(sock, argv[2]);
+
+    // hello packet
+	write_server(sock, createInitGestureBraceletXml().c_str());
+	sleep(1);
+    while(1)
+    {
+        readBytes = RS232_PollComport(serialPort, buff, BUFFSIZERS);
+        buff[readBytes] = '\0';
+        if(readBytes > 0)
+        {
+                string command((char*) buff);
+                cout<<command<<endl;
+		xml = acreateGestureXml("2", "2", "2", "3", command);
+                strcpy(bufferSoc, xml.c_str());
+                write_server(sock,bufferSoc);
+
+        }
+    }
+
+    return 0;
+}
